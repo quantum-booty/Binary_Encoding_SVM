@@ -205,7 +205,7 @@ class BinaryEncoderSVM:
         y_preds = []
         for pred in svm_preds:
             y_pred = np.argwhere(np.all(pred == self.decodings, axis=1))
-            # if we can find the svm prediction in the decoding table, it means
+            # if we cannot find the svm prediction in the decoding table, it means
             # that it cannot be unambiguously classified
             if y_pred.size == 0:
                 y_pred = None
