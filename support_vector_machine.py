@@ -143,10 +143,10 @@ class BinaryEncoderSVM:
         """Encode the target labels for training the SVMs
         This is done by converting the decoding table into a table like this
         for the 3 classes case:
-            Encoding      | -1  | 1
+            Encoding      | +1  | -1
             -----------------------
-            SVM 1 classes | 0 1 | 2
-            SVM 2 classes | 0 2 | 1
+            SVM 1 classes | 0 1 |  2
+            SVM 2 classes | 0 2 |  1
 
         For example, when training SVM 1, we encode the target label such that
         class 0 and 1 has target label -1 and class 2 has target label +1.
