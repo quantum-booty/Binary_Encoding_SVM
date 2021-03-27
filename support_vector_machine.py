@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from sklearn import datasets
+import pandas as pd
 
 plt.style.use('seaborn-darkgrid')
 
@@ -83,7 +84,7 @@ class SVM:
     def feature_mapping(X, func):
         return np.apply_along_axis(func, axis=1, arr=X)
 
-    def plot_decision_boundary(self, X, Y, X_pred=None):
+    def plot_decision_boundary(self, X, Y, X_test=None, save_figure=False, figure_path='binary_encoding_SVM_1.png'):
         if np.abs(self.W[1]) < 0.0001:
             x_range = np.array([-self.W0, -self.W0])
             y_range = np.array([np.min(X[:, 1]), np.max(X[:, 1])])
@@ -93,8 +94,8 @@ class SVM:
 
         plt.figure()
         plt.scatter(X[:, 0], X[:, 1], c=Y)
-        if X_pred is not None:
-            plt.scatter(X_pred[:, 0], X_pred[:, 1], c='r')
+        if X_test is not None:
+            plt.scatter(X_test[:, 0], X_test[:, 1], c='g', label='Test set')
 
         if self.lambda_ is not None:
             support_vectors = X[self.lambda_ != 0]
@@ -105,6 +106,8 @@ class SVM:
             )
             plt.legend()
         plt.plot(x_range, y_range)
+        if save_figure:
+            plt.savefig(figure_path, dpi=300)
         plt.show()
 
 
@@ -115,7 +118,7 @@ class BinaryEncoderSVM:
 
     def __init__(self):
         self.decodings = None
-        self.SVMs = []
+        self.SVMs: list[SVM] = []
         self.n_svm = None
 
     def fit(self, X, Y, plot=False):
@@ -129,7 +132,7 @@ class BinaryEncoderSVM:
 
         self.decoding_table(classes)
 
-        for y_encoded in self.binary_encoding(Y):
+        for i, y_encoded in enumerate(self.binary_encoding(Y)):
             y_encoded = y_encoded[:, None]
 
             svm = SVM()
@@ -137,7 +140,9 @@ class BinaryEncoderSVM:
             self.SVMs.append(svm)
 
             if plot:
-                svm.plot_decision_boundary(X, y_encoded)
+                svm.plot_decision_boundary(
+                    X, y_encoded, save_figure=True, figure_path=f'outputs/binary_encoding_SVM_{i}'
+                )
 
     def binary_encoding(self, Y):
         """Encode the target labels for training the SVMs
@@ -241,3 +246,30 @@ if __name__ == "__main__":
     clf.fit(X, y, plot=True)
     accuracy = clf.score(clf.predict(X), y)
     print('accuracy of binary encoder svm: ', accuracy)
+
+    X_test = (X[y == 0] + X[y == 1] + X[y == 0]) / 3
+    svm_preds = np.empty((len(X_test), 2))
+    for i, (y_encoded, svm) in enumerate(zip(clf.binary_encoding(y), clf.SVMs)):
+        svm.plot_decision_boundary(X, y_encoded, X_test, save_figure=True, figure_path=f'outputs/testset_{i}.png')
+        svm_preds[:, i] = svm.predict(X_test)
+
+    y_test_pred = clf.predict(X_test)
+
+    result = pd.DataFrame(
+        index=range(len(X_test)),
+        columns=[
+            'Test sample feature 1',
+            'Test sample feature 2',
+            'Output of SVM 1',
+            'Output of SVM 2',
+            'Classification',
+        ],
+    )
+    result['Test sample feature 1'] = X_test[:, 0].round(3)
+    result['Test sample feature 2'] = X_test[:, 1].round(3)
+    result['Output of SVM 1'] = svm_preds[:, 0].astype(int)
+    result['Output of SVM 2'] = svm_preds[:, 1].astype(int)
+    result['Classification'] = y_test_pred
+
+    print(result)
+    result.to_csv('outputs/test_set_results.csv')
