@@ -17,6 +17,8 @@ class SVM:
         self.W0 = None
         self.lambda_ = None
         self.margin = None
+        self.support_vectors = None
+        self.support_y = None
 
     def fit(self, X, Y):
         """
@@ -55,6 +57,9 @@ class SVM:
 
         # round it to get rid of noise, and so that only support vectors have non-zero lambda
         self.lambda_ = res.x.round(10)
+        support_vec_idx = self.lambda_ != 0  # first find the support vectors
+        self.support_vectors = X[support_vec_idx]
+        self.support_y = Y[support_vec_idx].ravel()
 
     def compute_W_W0(self, Y, X):
         self.W = np.sum(self.lambda_[:, None] * Y * X, axis=0)
@@ -64,11 +69,8 @@ class SVM:
         # y_i * (W.T @ x_i + W_0) = 1
         # W_0 = - (y_i * W.T @ x_i / y_i)
         # We calculate W_0 for each sample i, and take its average value
-        support_vec_idx = self.lambda_ != 0  # first find the support vectors
-        y = Y[support_vec_idx]
-        x = X[support_vec_idx]
-        numerator = y * (x @ self.W)[:, None] - 1
-        denominator = -y
+        numerator = self.support_y * (self.support_vectors @ self.W)[:, None] - 1
+        denominator = -self.support_y
         self.W0 = np.mean(numerator / denominator)
 
     def compute_training_margin(self):
@@ -98,11 +100,16 @@ class SVM:
             plt.scatter(X_test[:, 0], X_test[:, 1], c='g', label='Test set')
 
         if self.lambda_ is not None:
-            support_vectors = X[self.lambda_ != 0]
-            y_support = Y[self.lambda_ != 0].ravel()
-            plt.scatter(support_vectors[y_support == -1, 0], support_vectors[y_support == -1, 1], c='red')
             plt.scatter(
-                support_vectors[y_support == 1, 0], support_vectors[y_support == 1, 1], c='red', label='Support vectors'
+                self.support_vectors[self.support_y == -1, 0],
+                self.support_vectors[self.support_y == -1, 1],
+                c='red',
+            )
+            plt.scatter(
+                self.support_vectors[self.support_y == 1, 0],
+                self.support_vectors[self.support_y == 1, 1],
+                c='red',
+                label='Support vectors',
             )
             plt.legend()
         plt.plot(x_range, y_range)
@@ -225,6 +232,33 @@ class BinaryEncoderSVM:
         return (Y_pred == Y).mean()
 
 
+def manual_lambda(x, y):
+    """
+    Manually solves lambda and W_0 given a set of support vectors.
+    x: support vectors, shape [n_features, n_support_vectors]
+    y: support y, shape [n_support_vectors, 1]
+    note that my SVM classifies follows the sklearn convention, which uses [n_support_vectors, n_features] convention.
+    """
+    n_sv = x.shape[1]
+    A = np.empty((n_sv + 1, n_sv + 1))
+    B = np.empty((n_sv + 1, 1))
+
+    A[0:n_sv, 0:n_sv] = y.T * (x.T @ x)
+    A[0:n_sv, -1] = 1
+    A[-1, 0:n_sv] = y.ravel()
+    A[-1, -1] = 0
+
+    B[0:n_sv] = 1 / y
+    B[-1] = 0
+
+    print('A @ theta = B')
+    print('theta = [lambda1, ..., lambda_n_sv, w_0].T')
+    print('A: \n', A.round(3))
+    print('B: \n', B.round(3))
+
+    print('theta: \n', np.linalg.inv(A) @ B)
+
+
 if __name__ == "__main__":
 
     X, y = datasets.make_blobs(
@@ -246,6 +280,11 @@ if __name__ == "__main__":
     clf.fit(X, y, plot=True)
     accuracy = clf.score(clf.predict(X), y)
     print('accuracy of binary encoder svm: ', accuracy)
+
+    for svm in clf.SVMs:
+        print('Support vectors: \n', svm.support_vectors)
+        print('Support y: \n', svm.support_y)
+        print('lambda: \n', svm.lambda_[svm.lambda_ != 0])
 
     X_test = (X[y == 0] + X[y == 1] + X[y == 0]) / 3
     svm_preds = np.empty((len(X_test), 2))
@@ -273,3 +312,16 @@ if __name__ == "__main__":
 
     print(result)
     result.to_csv('outputs/test_set_results.csv')
+
+    # manually solving for lambdas
+    svm = clf.SVMs[0]
+    print('Support vectors: \n', svm.support_vectors.round(3))
+    print('Support y: \n', svm.support_y.round(3))
+    print('lambda: \n', svm.lambda_[svm.lambda_ != 0])
+    print('W: \n', svm.W)
+    print('W0: \n', svm.W0)
+
+    x = svm.support_vectors.T
+    y = svm.support_y[:, None]
+
+    manual_lambda(x, y)
